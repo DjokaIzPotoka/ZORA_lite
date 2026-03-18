@@ -3,24 +3,28 @@
 import * as React from "react";
 import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
+import type { BalancePoint } from "@/lib/tradeFilters";
 
-export type CumulativePnLPoint = {
-  date: string;
-  cumulativePnl: number;
-  displayDate: string;
-};
-
-type CumulativePnLChartProps = {
-  data: CumulativePnLPoint[];
-  totalPnl: number;
+type TotalBalanceChartProps = {
+  data: BalancePoint[];
+  range: "7D" | "30D" | "90D";
+  onRangeChange: (range: "7D" | "30D" | "90D") => void;
+  currentBalance: number;
 };
 
 const AXIS_LABEL = "rgba(255,255,255,0.6)";
 const AXIS_LINE = "rgba(255,255,255,0.4)";
 const SPLIT_LINE = { color: "rgba(255,255,255,0.06)" };
-const GREEN = "#34d399";
+const BLUE = "#60a5fa";
 
-export function CumulativePnLChart({ data, totalPnl }: CumulativePnLChartProps) {
+export function TotalBalanceChart({
+  data,
+  range,
+  onRangeChange,
+  currentBalance,
+}: TotalBalanceChartProps) {
+  const ranges: ("7D" | "30D" | "90D")[] = ["7D", "30D", "90D"];
+
   const option: EChartsOption = React.useMemo(() => {
     if (data.length === 0) return {};
 
@@ -52,17 +56,17 @@ export function CumulativePnLChart({ data, totalPnl }: CumulativePnLChartProps) 
           const p = arr[0];
           if (!p || p.dataIndex == null) return "";
           const point = data[p.dataIndex];
-          return `<div style="padding:4px 0">${point.displayDate}</div><div>Cumulative P&L: $${Number(point.cumulativePnl).toFixed(2)}</div>`;
+          return `<div style="padding:4px 0">${point.displayDate}</div><div>Balance: $${Number(point.balance).toFixed(2)}</div>`;
         },
       },
       series: [
         {
           type: "line",
-          data: data.map((d) => d.cumulativePnl),
+          data: data.map((d) => d.balance),
           smooth: true,
           symbol: "circle",
           symbolSize: 6,
-          lineStyle: { color: GREEN, width: 2 },
+          lineStyle: { color: BLUE, width: 2 },
           areaStyle: {
             color: {
               type: "linear",
@@ -71,8 +75,8 @@ export function CumulativePnLChart({ data, totalPnl }: CumulativePnLChartProps) 
               x2: 0,
               y2: 1,
               colorStops: [
-                { offset: 0, color: "rgba(52, 211, 153, 0.4)" },
-                { offset: 1, color: "rgba(52, 211, 153, 0)" },
+                { offset: 0, color: "rgba(96, 165, 250, 0.35)" },
+                { offset: 1, color: "rgba(96, 165, 250, 0)" },
               ],
             },
           },
@@ -83,15 +87,33 @@ export function CumulativePnLChart({ data, totalPnl }: CumulativePnLChartProps) 
 
   return (
     <div className="rounded-xl border border-white/10 bg-[#121826] p-5 shadow-lg">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">Cumulative P&L</h3>
-        <span className={`text-lg font-semibold ${totalPnl >= 0 ? "text-green-400" : "text-red-400"}`}>
-          {totalPnl >= 0 ? "+" : ""}${totalPnl.toFixed(2)}
-        </span>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-white">Total Balance</h2>
+        <div className="flex items-center gap-3">
+          <span className="text-lg font-semibold text-blue-400">
+            ${currentBalance.toFixed(2)}
+          </span>
+          <div className="flex gap-2">
+            {ranges.map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => onRangeChange(r)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  range === r
+                    ? "bg-white/10 text-white"
+                    : "text-white/60 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       <div className="h-[280px] w-full">
         {data.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-sm text-white/50">
+          <div className="flex h-full items-center justify-center text-white/50 text-sm">
             No trade data yet
           </div>
         ) : (

@@ -8,14 +8,14 @@ import { getStartingBalanceForFilter } from "../lib/settings";
 import {
   filterTradesByMarket,
   computeCumulativePnL,
+  computeBalanceSeries,
   computeStatsFromTrades,
   type CumulativePnLPoint,
 } from "@/lib/tradeFilters";
 import { useMarketFilter } from "@/store/marketFilterStore";
 import { StatCards } from "../components/dashboard/StatCards";
-import {
-  CumulativePnLChart,
-} from "../components/dashboard/CumulativePnLChart";
+import { CumulativePnLChart } from "../components/dashboard/CumulativePnLChart";
+import { TotalBalanceChart } from "../components/dashboard/TotalBalanceChart";
 import { RecentTrades } from "../components/dashboard/RecentTrades";
 import { AIPredictiveReport } from "../components/dashboard/AIPredictiveReport";
 import { MarketFilterToggle } from "../components/shared/MarketFilterToggle";
@@ -26,6 +26,21 @@ function applyRangeToPoints(
   points: CumulativePnLPoint[],
   range: Range
 ): CumulativePnLPoint[] {
+  if (points.length === 0) return [];
+  const now = Date.now();
+  const ms: Record<Range, number> = {
+    "7D": 7 * 24 * 60 * 60 * 1000,
+    "30D": 30 * 24 * 60 * 60 * 1000,
+    "90D": 90 * 24 * 60 * 60 * 1000,
+  };
+  const cutoff = now - ms[range];
+  return points.filter((p) => new Date(p.date).getTime() >= cutoff);
+}
+
+function applyRangeToBalancePoints<T extends { date: string }>(
+  points: T[],
+  range: Range
+): T[] {
   if (points.length === 0) return [];
   const now = Date.now();
   const ms: Record<Range, number> = {
@@ -78,6 +93,15 @@ export default function DashboardPage() {
     [cumulativePoints, range]
   );
 
+  const balancePoints = React.useMemo(
+    () => computeBalanceSeries(filteredTrades, startingBalance),
+    [filteredTrades, startingBalance]
+  );
+  const balanceChartData = React.useMemo(
+    () => applyRangeToBalancePoints(balancePoints, range),
+    [balancePoints, range]
+  );
+
   const recentTrades = React.useMemo(() => filteredTrades.slice(0, 5), [filteredTrades]);
 
   const isLoading = tradesLoading;
@@ -113,6 +137,15 @@ export default function DashboardPage() {
                 totalFees={totalFees}
                 avgWin={avgWin}
                 avgLoss={avgLoss}
+              />
+            </section>
+
+            <section className="mb-8">
+              <TotalBalanceChart
+                data={balanceChartData}
+                range={range}
+                onRangeChange={setRange}
+                currentBalance={totalBalance}
               />
             </section>
 

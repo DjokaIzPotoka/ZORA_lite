@@ -122,8 +122,8 @@ export function CryptoCallPutChart({
           xAxis: spotPrice,
           name: "",
           lineStyle: { color: "rgba(255,255,255,0.35)", type: "dashed", width: 1 },
-          label: { show: false },
-        } as { xAxis: number; name: string; lineStyle: { color: string; type: "dashed"; width: number }; label: { show: boolean } });
+          label: { formatter: "", color: "rgba(255,255,255,0.8)", fontSize: 10 },
+        });
       }
     }
 

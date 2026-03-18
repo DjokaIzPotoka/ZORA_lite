@@ -1,15 +1,8 @@
 "use client";
 
 import * as React from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import ReactECharts from "echarts-for-react";
+import type { EChartsOption } from "echarts";
 
 type MonthPnl = { month: string; shortLabel: string; pnl: number };
 
@@ -21,6 +14,11 @@ type MonthlyPerformanceProps = {
   worstPnl: number;
 };
 
+const AXIS_LABEL = "rgba(255,255,255,0.6)";
+const AXIS_LINE = "rgba(255,255,255,0.4)";
+const SPLIT_LINE = { color: "rgba(255,255,255,0.06)" };
+const GREEN = "#34d399";
+
 export function MonthlyPerformance({
   data,
   bestMonth,
@@ -28,6 +26,54 @@ export function MonthlyPerformance({
   worstMonth,
   worstPnl,
 }: MonthlyPerformanceProps) {
+  const option: EChartsOption = React.useMemo(() => {
+    if (data.length === 0) return {};
+
+    return {
+      backgroundColor: "transparent",
+      grid: { left: 56, right: 24, top: 16, bottom: 32, containLabel: false },
+      xAxis: {
+        type: "category",
+        data: data.map((d) => d.shortLabel),
+        axisLine: { lineStyle: { color: AXIS_LINE } },
+        axisTick: { lineStyle: { color: AXIS_LINE } },
+        axisLabel: { color: AXIS_LABEL, fontSize: 11 },
+      },
+      yAxis: {
+        type: "value",
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { lineStyle: SPLIT_LINE },
+        axisLabel: { color: AXIS_LABEL, fontSize: 11, formatter: (v: number) => `$${v}` },
+      },
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: "#121826",
+        borderColor: "rgba(255,255,255,0.1)",
+        borderWidth: 1,
+        textStyle: { color: "rgba(255,255,255,0.9)" },
+        formatter: (params: unknown) => {
+          const arr = Array.isArray(params) ? params : [];
+          const p = arr[0];
+          if (!p || p.dataIndex == null) return "";
+          const point = data[p.dataIndex];
+          return `<div style="padding:4px 0">${point.month}</div><div>P&L: $${Number(point.pnl).toFixed(2)}</div>`;
+        },
+      },
+      series: [
+        {
+          type: "bar",
+          data: data.map((d) => d.pnl),
+          itemStyle: {
+            color: GREEN,
+            borderRadius: [4, 4, 0, 0],
+          },
+          emphasis: { itemStyle: { color: "#4ade80" } },
+        },
+      ],
+    };
+  }, [data]);
+
   return (
     <div className="rounded-xl border border-white/10 bg-[#121826] p-5 shadow-lg">
       <h3 className="mb-4 text-lg font-semibold text-white">Monthly Performance</h3>
@@ -37,39 +83,7 @@ export function MonthlyPerformance({
             No trade data yet
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-              <XAxis
-                dataKey="shortLabel"
-                stroke="rgba(255,255,255,0.4)"
-                tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 11 }}
-                tickLine={{ stroke: "rgba(255,255,255,0.1)" }}
-              />
-              <YAxis
-                stroke="rgba(255,255,255,0.4)"
-                tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 11 }}
-                tickFormatter={(v) => `$${v}`}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#121826",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: "8px",
-                }}
-                formatter={(value, _name, props) => [
-                  `$${Number(value ?? 0).toFixed(2)}`,
-                  (props as { payload?: MonthPnl })?.payload?.month ?? "",
-                ]}
-              />
-              <Bar
-                dataKey="pnl"
-                radius={[4, 4, 0, 0]}
-                fill="#34d399"
-                fillOpacity={0.9}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+          <ReactECharts option={option} notMerge style={{ height: "100%", width: "100%" }} opts={{ renderer: "canvas" }} />
         )}
       </div>
       <div className="mt-3 flex justify-between border-t border-white/10 pt-3 text-sm">

@@ -1,16 +1,8 @@
 "use client";
 
 import * as React from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
+import ReactECharts from "echarts-for-react";
+import type { EChartsOption } from "echarts";
 
 type DayPnl = { day: number; pnl: number; trades: number; winRate: number };
 
@@ -18,7 +10,63 @@ type PerformanceByDayOfMonthProps = {
   data: DayPnl[];
 };
 
+const AXIS_LABEL = "rgba(255,255,255,0.6)";
+const AXIS_LINE = "rgba(255,255,255,0.4)";
+const SPLIT_LINE = { color: "rgba(255,255,255,0.06)" };
+const GREEN = "#34d399";
+const RED = "#f87171";
+
 export function PerformanceByDayOfMonth({ data }: PerformanceByDayOfMonthProps) {
+  const option: EChartsOption = React.useMemo(() => {
+    if (data.length === 0) return {};
+
+    return {
+      backgroundColor: "transparent",
+      grid: { left: 56, right: 24, top: 16, bottom: 32, containLabel: false },
+      xAxis: {
+        type: "category",
+        data: data.map((d) => String(d.day)),
+        axisLine: { lineStyle: { color: AXIS_LINE } },
+        axisTick: { lineStyle: { color: AXIS_LINE } },
+        axisLabel: { color: AXIS_LABEL, fontSize: 11 },
+      },
+      yAxis: {
+        type: "value",
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { lineStyle: SPLIT_LINE },
+        axisLabel: { color: AXIS_LABEL, fontSize: 11, formatter: (v: number) => `$${v}` },
+      },
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: "#121826",
+        borderColor: "rgba(255,255,255,0.1)",
+        borderWidth: 1,
+        textStyle: { color: "rgba(255,255,255,0.9)" },
+        formatter: (params: unknown) => {
+          const arr = Array.isArray(params) ? params : [];
+          const p = arr[0];
+          if (!p || p.dataIndex == null) return "";
+          const point = data[p.dataIndex];
+          return `<div style="padding:4px 0">Day ${point.day} · ${point.trades} trades · ${point.winRate.toFixed(0)}% win</div><div>P&L: $${Number(point.pnl).toFixed(2)}</div>`;
+        },
+      },
+      series: [
+        {
+          type: "bar",
+          data: data.map((d) => ({
+            value: d.pnl,
+            itemStyle: {
+              color: d.pnl >= 0 ? GREEN : RED,
+              borderRadius: [4, 4, 0, 0],
+            },
+          })),
+          emphasis: { itemStyle: { opacity: 1 } },
+        },
+      ],
+    };
+  }, [data]);
+
   return (
     <div className="rounded-xl border border-white/10 bg-[#121826] p-5 shadow-lg">
       <h3 className="mb-4 text-lg font-semibold text-white">Performance by Day of Month</h3>
@@ -28,41 +76,7 @@ export function PerformanceByDayOfMonth({ data }: PerformanceByDayOfMonthProps) 
             No trade data yet
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-              <XAxis
-                dataKey="day"
-                stroke="rgba(255,255,255,0.4)"
-                tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 11 }}
-                tickLine={{ stroke: "rgba(255,255,255,0.1)" }}
-              />
-              <YAxis
-                stroke="rgba(255,255,255,0.4)"
-                tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 11 }}
-                tickFormatter={(v) => `$${v}`}
-              />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#121826",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: "8px",
-                }}
-                formatter={(value, _name, props) => {
-                  const p = (props as { payload?: DayPnl })?.payload;
-                  return [
-                    `$${Number(value ?? 0).toFixed(2)}`,
-                    p ? `Day ${p.day} · ${p.trades} trades · ${p.winRate.toFixed(0)}% win` : "",
-                  ];
-                }}
-              />
-              <Bar dataKey="pnl" radius={[4, 4, 0, 0]} fillOpacity={0.9}>
-                {data.map((entry, index) => (
-                  <Cell key={index} fill={entry.pnl >= 0 ? "#34d399" : "#f87171"} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          <ReactECharts option={option} notMerge style={{ height: "100%", width: "100%" }} opts={{ renderer: "canvas" }} />
         )}
       </div>
       {data.some((d) => d.trades > 0) && (

@@ -2,15 +2,8 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import ReactECharts from "echarts-for-react";
+import type { EChartsOption } from "echarts";
 import {
   Calendar,
   BarChart3,
@@ -109,6 +102,65 @@ export default function ReportsPage() {
     () => computeCumulativeSeries(tradesInRange),
     [tradesInRange]
   );
+
+  const cumulativeChartOption: EChartsOption = React.useMemo(() => {
+    if (chartData.length === 0) return {};
+    return {
+      backgroundColor: "transparent",
+      grid: { left: 56, right: 24, top: 16, bottom: 32, containLabel: false },
+      xAxis: {
+        type: "category",
+        data: chartData.map((d) => d.displayDate),
+        axisLine: { lineStyle: { color: "rgba(255,255,255,0.4)" } },
+        axisTick: { lineStyle: { color: "rgba(255,255,255,0.4)" } },
+        axisLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11 },
+      },
+      yAxis: {
+        type: "value",
+        axisLine: { show: false },
+        axisTick: { show: false },
+        splitLine: { lineStyle: { color: "rgba(255,255,255,0.06)" } },
+        axisLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11, formatter: (v: number) => `$${v}` },
+      },
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: "#121826",
+        borderColor: "rgba(255,255,255,0.1)",
+        borderWidth: 1,
+        textStyle: { color: "rgba(255,255,255,0.9)" },
+        formatter: (params: unknown) => {
+          const arr = Array.isArray(params) ? params : [];
+          const p = arr[0];
+          if (!p || p.dataIndex == null) return "";
+          const point = chartData[p.dataIndex];
+          return `<div style="padding:4px 0">${point.displayDate}</div><div>Cumulative P&L: $${Number(point.cumulativePnl).toFixed(2)}</div>`;
+        },
+      },
+      series: [
+        {
+          type: "line",
+          data: chartData.map((d) => d.cumulativePnl),
+          smooth: true,
+          symbol: "circle",
+          symbolSize: 6,
+          lineStyle: { color: "#34d399", width: 2 },
+          areaStyle: {
+            color: {
+              type: "linear",
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: "rgba(52, 211, 153, 0.4)" },
+                { offset: 1, color: "rgba(52, 211, 153, 0)" },
+              ],
+            },
+          },
+        },
+      ],
+    };
+  }, [chartData]);
 
   const handleExportPdf = React.useCallback(async () => {
     setExportError(null);
@@ -287,69 +339,12 @@ export default function ReportsPage() {
                 No trade data in this period
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={chartData}
-                  margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
-                >
-                  <defs>
-                    <linearGradient
-                      id="reportCumulativeGradient"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop
-                        offset="0%"
-                        stopColor="#34d399"
-                        stopOpacity={0.4}
-                      />
-                      <stop
-                        offset="100%"
-                        stopColor="#34d399"
-                        stopOpacity={0}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="rgba(255,255,255,0.06)"
-                  />
-                  <XAxis
-                    dataKey="displayDate"
-                    stroke="rgba(255,255,255,0.4)"
-                    tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 11 }}
-                    tickLine={{ stroke: "rgba(255,255,255,0.1)" }}
-                  />
-                  <YAxis
-                    stroke="rgba(255,255,255,0.4)"
-                    tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 11 }}
-                    tickLine={{ stroke: "rgba(255,255,255,0.1)" }}
-                    tickFormatter={(v) => `$${v}`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#121826",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      borderRadius: "8px",
-                    }}
-                    labelStyle={{ color: "rgba(255,255,255,0.8)" }}
-                    formatter={(value: number | undefined) => [
-                      value != null ? `$${Number(value).toFixed(2)}` : "",
-                      "Cumulative P&L",
-                    ]}
-                    labelFormatter={(label) => label}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="cumulativePnl"
-                    stroke="#34d399"
-                    strokeWidth={2}
-                    fill="url(#reportCumulativeGradient)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              <ReactECharts
+                option={cumulativeChartOption}
+                notMerge
+                style={{ height: "100%", width: "100%" }}
+                opts={{ renderer: "canvas" }}
+              />
             )}
           </div>
         </section>

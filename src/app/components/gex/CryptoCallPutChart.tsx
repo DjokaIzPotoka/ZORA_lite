@@ -79,7 +79,7 @@ export function CryptoCallPutChart({
       xAxis: number;
       name: string;
       lineStyle: { color: string; type: "dashed"; width: number };
-      label: { formatter: string; color: string; fontSize: number };
+      label: { formatter: string; color: string; fontSize: number; show?: boolean };
     }> = [];
 
     if (zeroGamma != null) {
@@ -120,10 +120,10 @@ export function CryptoCallPutChart({
       if (spotPrice >= xMinForSpot && spotPrice <= xMaxForSpot) {
         markLineData.push({
           xAxis: spotPrice,
-          name: "",
+          name: "Spot",
           lineStyle: { color: "rgba(255,255,255,0.35)", type: "dashed", width: 1 },
-          label: { show: false },
-        } as { xAxis: number; name: string; lineStyle: { color: string; type: "dashed"; width: number }; label: { show: boolean } });
+          label: { formatter: "Spot", color: "rgba(255,255,255,0.6)", fontSize: 10, show: false },
+        });
       }
     }
 

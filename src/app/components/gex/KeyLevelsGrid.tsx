@@ -44,6 +44,8 @@ function LevelCard({ tag, value, context, variant }: LevelCardProps) {
 export type KeyLevelsGridProps = {
   spotPrice: number;
   zeroGammaLevel: number | null;
+  /** When zeroGammaLevel is null, show this in the Zero gamma card (e.g. "No crossing in filtered range") */
+  zeroGammaMessage?: string | null;
   callWall: number | null;
   putWall: number | null;
   strongestPositiveStrike: number | null;
@@ -53,15 +55,19 @@ export type KeyLevelsGridProps = {
 export function KeyLevelsGrid({
   spotPrice,
   zeroGammaLevel,
+  zeroGammaMessage,
   callWall,
   putWall,
   strongestPositiveStrike,
   strongestNegativeStrike,
 }: KeyLevelsGridProps) {
-  const pts = (level: number) => {
-    const diff = level - spotPrice;
-    if (Math.abs(diff) < spotPrice * 0.001) return "at spot";
-    return diff > 0 ? `${diff.toFixed(0)} pts above spot` : `${Math.abs(diff).toFixed(0)} pts below spot`;
+  const distanceContext = (level: number) => {
+    const distance = level - spotPrice;
+    const distancePct = spotPrice > 0 ? (distance / spotPrice) * 100 : 0;
+    if (Math.abs(distance) < spotPrice * 0.001) return "at spot";
+    const pts = `${distance > 0 ? "+" : ""}${distance.toFixed(0)} pts`;
+    const pct = `${distancePct >= 0 ? "+" : ""}${distancePct.toFixed(2)}%`;
+    return `${pts} (${pct})`;
   };
 
   const levels: Array<{ tag: string; value: string; context?: string; variant: LevelCardProps["variant"] }> = [];
@@ -69,7 +75,13 @@ export function KeyLevelsGrid({
     levels.push({
       tag: "Zero gamma",
       value: formatPrice(zeroGammaLevel),
-      context: pts(zeroGammaLevel),
+      context: distanceContext(zeroGammaLevel),
+      variant: "zero",
+    });
+  } else if (zeroGammaMessage) {
+    levels.push({
+      tag: "Zero gamma",
+      value: zeroGammaMessage,
       variant: "zero",
     });
   }
@@ -77,7 +89,7 @@ export function KeyLevelsGrid({
     levels.push({
       tag: "Call wall",
       value: formatPrice(callWall),
-      context: pts(callWall),
+      context: distanceContext(callWall),
       variant: "call",
     });
   }
@@ -85,7 +97,7 @@ export function KeyLevelsGrid({
     levels.push({
       tag: "Put wall",
       value: formatPrice(putWall),
-      context: pts(putWall),
+      context: distanceContext(putWall),
       variant: "put",
     });
   }
@@ -93,7 +105,7 @@ export function KeyLevelsGrid({
     levels.push({
       tag: "Strongest + strike",
       value: formatPrice(strongestPositiveStrike),
-      context: pts(strongestPositiveStrike),
+      context: distanceContext(strongestPositiveStrike),
       variant: "gamma",
     });
   }
@@ -101,7 +113,7 @@ export function KeyLevelsGrid({
     levels.push({
       tag: "Strongest − strike",
       value: formatPrice(strongestNegativeStrike),
-      context: pts(strongestNegativeStrike),
+      context: distanceContext(strongestNegativeStrike),
       variant: "gamma",
     });
   }

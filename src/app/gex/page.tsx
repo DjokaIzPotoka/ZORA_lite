@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getGEXPageData, type GEXView, type GEXPagePayload } from "../lib/market/gexData";
+import { getGEXPageData, getTradierStatus, type GEXView, type GEXPagePayload } from "../lib/market/gexData";
 import { getCryptoGexPageData, type CryptoGexPagePayload } from "../lib/market/crypto-gex";
 import type { CryptoAsset } from "../lib/market/types";
 import { CryptoSummaryCards } from "../components/gex/CryptoSummaryCards";
@@ -17,7 +17,7 @@ import { LiquidationClusterTable } from "../components/gex/LiquidationClusterTab
 import { LiquidationZonesCard } from "../components/gex/LiquidationZonesCard";
 import { CryptoMarketSummary } from "../components/gex/CryptoMarketSummary";
 
-const VIEWS: GEXView[] = ["ES", "NQ", "Gold", "Silver"];
+const VIEWS: GEXView[] = ["SPX", "NDX", "Gold", "Silver"];
 type PageMode = "crypto" | "indices";
 type GEXTimeframe = "daily" | "weekly";
 const CRYPTO_ASSETS: CryptoAsset[] = ["BTC", "ETH"];
@@ -47,7 +47,7 @@ export default function GEXPage() {
   const [mode, setMode] = React.useState<PageMode>("crypto");
   const [cryptoAsset, setCryptoAsset] = React.useState<CryptoAsset>("BTC");
   const [timeframe, setTimeframe] = React.useState<GEXTimeframe>("daily");
-  const [view, setView] = React.useState<GEXView>("ES");
+  const [view, setView] = React.useState<GEXView>("SPX");
 
   const {
     data: payload,
@@ -73,6 +73,13 @@ export default function GEXPage() {
     enabled: mode === "crypto",
   });
 
+  const { data: tradierStatus } = useQuery({
+    queryKey: ["tradier-status"],
+    queryFn: () => getTradierStatus(),
+    staleTime: 60 * 1000,
+    enabled: mode === "indices",
+  });
+
   const gex = payload?.gex ?? null;
   const quote = payload?.futuresQuote ?? null;
   const gexNotAvailable = payload?.gexNotAvailable ?? false;
@@ -94,7 +101,7 @@ export default function GEXPage() {
               <p className="mt-1 text-sm text-white/55">
                 {isCrypto
                   ? "Crypto derivatives positioning, options gamma, and liquidation pressure"
-                  : "Gamma exposure and options-based positioning (ES proxy: SPY, NQ proxy: QQQ)."}
+                  : "Indices GEX: Tradier options, Yahoo spot (SPX / NDX / Gold / Silver)."}
               </p>
               {isCrypto && (
                 <p className="mt-0.5 text-xs text-white/40">
@@ -185,6 +192,22 @@ export default function GEXPage() {
                       </button>
                     ))}
                   </div>
+                </>
+              )}
+              {mode === "indices" && (
+                <>
+                  {tradierStatus !== undefined && (
+                    <span className="text-xs text-white/50">
+                      Tradier API: {tradierStatus?.configured ? "OK" : "Not set"}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => refetch()}
+                    className="rounded-md border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 hover:bg-white/10"
+                  >
+                    Refresh
+                  </button>
                 </>
               )}
               {mode === "indices" && (
@@ -447,13 +470,20 @@ export default function GEXPage() {
               </div>
             )}
 
-            {/* Underlying / proxy label */}
-            <p className="mb-6 text-sm text-white/50">
-              {view === "ES" && "ES=F + SPY options"}
-              {view === "NQ" && "NQ=F + QQQ options"}
-              {view === "Gold" && "GC=F"}
-              {view === "Silver" && "SI=F"}
-            </p>
+            {/* Underlying / options source label */}
+            <div className="mb-6 flex flex-wrap items-center gap-2">
+              <p className="text-sm text-white/50">
+                {view === "SPX" && "ES=F spot + SPX options"}
+                {view === "NDX" && payload?.useQQQFallback ? "NQ=F spot + QQQ options (scaled to NDX)" : "NQ=F spot + NDX options"}
+                {view === "Gold" && "GC=F"}
+                {view === "Silver" && "SI=F"}
+              </p>
+              {payload?.useQQQFallback && (
+                <span className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300">
+                  Using QQQ fallback (scaled)
+                </span>
+              )}
+            </div>
 
             {/* Hero analytics strip — Indices */}
             <section className="mb-10">
@@ -474,6 +504,11 @@ export default function GEXPage() {
                 </div>
                 {gex && (
                   <>
+                    {gex.insufficientOptions && (
+                      <div className="col-span-full rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+                        Insufficient options data. Key levels and strike table are hidden.
+                      </div>
+                    )}
                     <div className={`rounded-xl border p-4 shadow-lg ${gex.netGEX >= 0 ? "bg-emerald-500/5 border-emerald-500/15" : "bg-red-500/5 border-red-500/15"}`}>
                       <p className="text-[11px] font-semibold uppercase tracking-widest text-white/50">Net GEX</p>
                       <p className={`mt-2 text-2xl font-bold tabular-nums ${gex.netGEX >= 0 ? "text-emerald-400" : "text-red-400"}`}>
@@ -487,7 +522,11 @@ export default function GEXPage() {
                     <div className="rounded-xl border border-white/10 bg-white/5 p-4 shadow-lg">
                       <p className="text-[11px] font-semibold uppercase tracking-widest text-white/50">Zero gamma</p>
                       <p className="mt-2 text-2xl font-bold text-white">
-                        {gex.zeroGammaLevel != null ? formatPrice(gex.zeroGammaLevel) : "—"}
+                        {gex.zeroGammaLevel != null
+                          ? formatPrice(gex.zeroGammaLevel)
+                          : gex.insufficientOptions
+                            ? "—"
+                            : "No crossing in filtered range"}
                       </p>
                     </div>
                     <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4 shadow-lg">
@@ -522,11 +561,12 @@ export default function GEXPage() {
               )}
             </section>
 
-            {/* Key levels grid — Indices */}
-            {gex && quote && (
+            {/* Key levels grid — Indices (all levels in display scale: SPX ~4-digit, NDX ~5-digit) */}
+            {gex && !gex.insufficientOptions && (quote || gex.spotPrice > 0) && (
               <KeyLevelsGrid
-                spotPrice={quote.price}
+                spotPrice={gex.spotPrice > 0 ? gex.spotPrice : quote!.price}
                 zeroGammaLevel={gex.zeroGammaLevel ?? null}
+                zeroGammaMessage={gex.zeroGammaLevel == null ? "No crossing in filtered range" : undefined}
                 callWall={gex.callWall ?? null}
                 putWall={gex.putWall ?? null}
                 strongestPositiveStrike={gex.strongestPositiveStrike ?? null}
@@ -535,7 +575,7 @@ export default function GEXPage() {
             )}
 
             {/* Strike exposure table */}
-            {gex && gex.strikeExposures.length > 0 && (
+            {gex && !gex.insufficientOptions && gex.strikeExposures.length > 0 && (
               <section className="mb-10">
                 <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-white/60">
                   Strike aggregates
@@ -601,6 +641,30 @@ export default function GEXPage() {
                     {gex.marketSummary}
                   </p>
                 </div>
+                {gex.debug != null && (
+                  <details className="mt-3 rounded-xl border border-white/10 bg-[#121826] p-4">
+                    <summary className="cursor-pointer text-xs font-medium uppercase tracking-wider text-white/50">
+                      Debug (dev)
+                    </summary>
+                    <pre className="mt-2 overflow-x-auto text-xs text-white/60">
+                      {JSON.stringify(
+                        {
+                          optionsBeforeFilter: gex.debug.optionsBeforeFilter,
+                          optionsAfterFilter: gex.debug.optionsAfterFilter,
+                          minStrike: gex.debug.minStrike,
+                          maxStrike: gex.debug.maxStrike,
+                          zeroGammaCrossingPair: gex.debug.zeroGammaCrossingPair,
+                          callWallStrike: gex.debug.callWallStrike,
+                          callWallValue: gex.debug.callWallValue,
+                          putWallStrike: gex.debug.putWallStrike,
+                          putWallValue: gex.debug.putWallValue,
+                        },
+                        null,
+                        2
+                      )}
+                    </pre>
+                  </details>
+                )}
               </section>
             )}
 
@@ -610,12 +674,12 @@ export default function GEXPage() {
                 Methodology
               </h2>
               <p className="text-sm leading-relaxed text-white/55">
-                GEX is computed as gamma × open interest × contract size × spot² × sign (calls +1, puts −1).
-                ES context uses SPY options; NQ context uses QQQ options. Gamma is from the data provider when available, otherwise approximated via Black-Scholes. Zero gamma level is the strike where cumulative net exposure flips sign. Gold and Silver show futures price context only; full options GEX for these underlyings is not included in this version.
+                GEX from Tradier options; spot from Yahoo (ES=F, NQ=F). Gamma × open interest × contract size × spot² × sign (calls +1, puts −1). SPX/NDX levels in index scale; NDX may use QQQ fallback scaled to NDX. Gold and Silver: Yahoo price only.
               </p>
             </section>
           </>
         )}
+
       </div>
     </div>
   );

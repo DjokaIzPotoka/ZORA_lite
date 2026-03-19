@@ -4,7 +4,10 @@ import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { getTrades, type Trade } from "../lib/trades";
-import { getStartingBalanceForFilter } from "../lib/settings";
+import {
+  applyEffectiveStartingForFilter,
+  getStartingBalanceForFilter,
+} from "../lib/settings";
 import {
   filterTradesByMarket,
   computeCumulativePnL,
@@ -78,6 +81,15 @@ export default function DashboardPage() {
 
   const totalPnl = stats.total_pnl;
   const totalBalance = startingBalance + totalPnl;
+
+  const handleTotalBalanceCommit = React.useCallback(
+    (newTotal: number) => {
+      const newStarting = Math.max(0, Math.round((newTotal - totalPnl) * 100) / 100);
+      applyEffectiveStartingForFilter(marketFilter, newStarting);
+      setStartingBalance(newStarting);
+    },
+    [marketFilter, totalPnl]
+  );
   const winRatePct = stats.win_rate_pct ?? 0;
   const totalTrades = stats.total_trades;
   const totalFees = stats.total_fees;
@@ -137,6 +149,7 @@ export default function DashboardPage() {
                 totalFees={totalFees}
                 avgWin={avgWin}
                 avgLoss={avgLoss}
+                onTotalBalanceCommit={handleTotalBalanceCommit}
               />
             </section>
 

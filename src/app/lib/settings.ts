@@ -76,3 +76,45 @@ export function getStartingBalance(): number {
 export function setStartingBalance(value: number): void {
   writeNumber(LEGACY_STORAGE_KEY, value);
 }
+
+function clearLegacyStartingBalance(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Persist starting balance for the active market filter so that
+ * startingBalance + realized P&L matches a chosen total balance.
+ * For "all", splits the combined starting across crypto/stocks (keeps ratio; equal split if both were zero).
+ */
+export function applyEffectiveStartingForFilter(
+  filter: "all" | "crypto" | "stocks",
+  effectiveStarting: number
+): void {
+  const s = Math.max(0, Number.isFinite(effectiveStarting) ? effectiveStarting : 0);
+  if (filter === "crypto") {
+    setStartingBalanceCrypto(s);
+    return;
+  }
+  if (filter === "stocks") {
+    setStartingBalanceStocks(s);
+    return;
+  }
+  clearLegacyStartingBalance();
+  const c = getStartingBalanceCrypto();
+  const st = getStartingBalanceStocks();
+  const sum = c + st;
+  if (sum <= 0) {
+    const half = Math.round((s / 2) * 100) / 100;
+    setStartingBalanceCrypto(half);
+    setStartingBalanceStocks(Math.round((s - half) * 100) / 100);
+    return;
+  }
+  const newC = Math.round(s * (c / sum) * 100) / 100;
+  setStartingBalanceCrypto(newC);
+  setStartingBalanceStocks(Math.round((s - newC) * 100) / 100);
+}

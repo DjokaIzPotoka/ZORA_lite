@@ -17,6 +17,7 @@ import { MarketFilterToggle } from "../components/shared/MarketFilterToggle";
 import { AddTradeDialog } from "../components/trades/AddTradeDialog";
 import { ImportTradesModal } from "../components/trades/ImportTradesModal";
 import { TradeDetailsModal } from "../components/trades/TradeDetailsModal";
+import { Pencil } from "lucide-react";
 
 function formatDate(iso: string) {
   try {
@@ -45,6 +46,7 @@ function formatPct(n: number) {
 export default function TradesPage() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  const [editingTrade, setEditingTrade] = React.useState<Trade | null>(null);
   const [importOpen, setImportOpen] = React.useState(false);
   const [totalBalance, setTotalBalance] = React.useState(0);
 
@@ -123,7 +125,10 @@ export default function TradesPage() {
             </button>
             <button
               type="button"
-              onClick={() => setDialogOpen(true)}
+              onClick={() => {
+                setEditingTrade(null);
+                setDialogOpen(true);
+              }}
               className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               + Add Trade
@@ -243,6 +248,10 @@ export default function TradesPage() {
                       trade={t}
                       onDelete={() => deleteMutation.mutate(t.id)}
                       onSelect={() => setSelectedTrade(t)}
+                      onEdit={() => {
+                        setEditingTrade(t);
+                        setDialogOpen(false);
+                      }}
                       isDeleting={deleteMutation.isPending}
                     />
                   ))
@@ -292,10 +301,16 @@ export default function TradesPage() {
       </div>
 
       <AddTradeDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        open={dialogOpen || editingTrade != null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDialogOpen(false);
+            setEditingTrade(null);
+          }
+        }}
         onSuccess={refetch}
         totalBalance={totalBalance}
+        tradeToEdit={editingTrade}
       />
       <ImportTradesModal open={importOpen} onOpenChange={setImportOpen} onSuccess={refetch} />
       <TradeDetailsModal
@@ -342,11 +357,13 @@ function TradeRow({
   trade,
   onDelete,
   onSelect,
+  onEdit,
   isDeleting,
 }: {
   trade: Trade;
   onDelete: () => void;
   onSelect: () => void;
+  onEdit: () => void;
   isDeleting: boolean;
 }) {
   const [confirmDelete, setConfirmDelete] = React.useState(false);
@@ -410,14 +427,26 @@ function TradeRow({
             </button>
           </span>
         ) : (
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            className="text-muted-foreground hover:text-destructive"
-            title="Delete trade"
-          >
-            🗑
-          </button>
+          <span className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              title="Edit trade"
+              aria-label="Edit trade"
+            >
+              <Pencil className="h-4 w-4" strokeWidth={2} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="rounded p-1 text-muted-foreground hover:text-destructive"
+              title="Delete trade"
+              aria-label="Delete trade"
+            >
+              🗑
+            </button>
+          </span>
         )}
       </td>
     </tr>

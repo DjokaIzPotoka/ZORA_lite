@@ -7,11 +7,26 @@ import {
   calculateCryptoPnL,
   calculateCryptoFees,
 } from "../../lib/calculations";
-import { insertTrade, type Market, type TradeType } from "../../lib/trades";
+import {
+  insertTrade,
+  updateTrade,
+  type Market,
+  type Trade,
+  type TradeType,
+} from "../../lib/trades";
 import { getSymbolsForMarket } from "../../lib/symbols";
 
 function getTodayDateString() {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Reverse of insertTrade note assembly: `Tags: …\n\nnotes` or plain notes. */
+function splitNotesAndTags(stored: string | null): { tags: string; notes: string } {
+  const s = (stored ?? "").trim();
+  if (!s) return { tags: "", notes: "" };
+  const m = s.match(/^Tags:\s*(.+?)(?:\n\n([\s\S]*))?$/);
+  if (m) return { tags: m[1].trim(), notes: (m[2] ?? "").trim() };
+  return { tags: "", notes: s };
 }
 
 type FormValues = {
@@ -50,9 +65,17 @@ type AddTradeDialogProps = {
   onSuccess?: () => void;
   /** Total balance (starting balance + realized P&L) for "position margin as % of balance" */
   totalBalance?: number;
+  /** When set, dialog updates this trade instead of inserting. */
+  tradeToEdit?: Trade | null;
 };
 
-export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0 }: AddTradeDialogProps) {
+export function AddTradeDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+  totalBalance = 0,
+  tradeToEdit = null,
+}: AddTradeDialogProps) {
   const form = useForm<FormValues>({ defaultValues });
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -85,19 +108,42 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
     return symbolOptions.filter((s) => s.toLowerCase().includes(q));
   }, [symbolOptions, symbolFilter]);
 
-  // Reset symbol when market changes
-  React.useEffect(() => {
-    setValue("symbol", "");
-    setSymbolFilter("");
-  }, [market, setValue]);
+  const marketField = register("market");
 
-  const prevOpenRef = React.useRef(false);
   React.useEffect(() => {
-    if (open && !prevOpenRef.current) {
+    if (!open) return;
+    if (tradeToEdit) {
+      const { tags, notes: noteBody } = splitNotesAndTags(tradeToEdit.notes);
+      const lev = 30;
+      const margin =
+        tradeToEdit.market === "crypto" && lev > 0
+          ? Math.round((tradeToEdit.qty / lev) * 100) / 100
+          : 0;
+      reset({
+        symbol: tradeToEdit.symbol,
+        market: tradeToEdit.market,
+        type: tradeToEdit.type,
+        entry_price: tradeToEdit.entry_price,
+        exit_price: tradeToEdit.exit_price,
+        entry_date: tradeToEdit.created_at.slice(0, 10),
+        qty: tradeToEdit.qty,
+        fees: tradeToEdit.fees,
+        notes: noteBody,
+        tags,
+        leverage: lev,
+        position_margin: margin,
+      });
+      setSymbolFilter("");
+      setMarginMode("fixed");
+      setMarginPercent(25);
+    } else {
+      reset(defaultValues);
       setValue("entry_date", getTodayDateString());
+      setMarginMode("percent");
+      setMarginPercent(25);
+      setSymbolFilter("");
     }
-    prevOpenRef.current = open;
-  }, [open, setValue]);
+  }, [open, tradeToEdit, reset, setValue]);
 
   // Lock body scroll when dialog is open; only dialog content should scroll
   React.useEffect(() => {
@@ -208,7 +254,7 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
         values.notes.trim() || null,
       ].filter(Boolean);
       const entryDate = values.entry_date?.trim();
-      await insertTrade({
+      const payload = {
         symbol: values.symbol.trim() || "—",
         type: values.type,
         market: values.market,
@@ -220,12 +266,17 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
         pnl_percent: preview.pnlPct,
         notes: notesParts.length > 0 ? notesParts.join("\n\n") : null,
         ...(entryDate ? { created_at: `${entryDate}T12:00:00.000Z` } : {}),
-      });
-      reset(defaultValues);
-      setValue("entry_date", getTodayDateString());
-      setMarginMode("percent");
-      setMarginPercent(25);
-      setSymbolFilter("");
+      };
+      if (tradeToEdit) {
+        await updateTrade(tradeToEdit.id, payload);
+      } else {
+        await insertTrade(payload);
+        reset(defaultValues);
+        setValue("entry_date", getTodayDateString());
+        setMarginMode("percent");
+        setMarginPercent(25);
+        setSymbolFilter("");
+      }
       onOpenChange(false);
       onSuccess?.();
     } catch (e) {
@@ -259,9 +310,11 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
           {/* Header */}
           <div className="flex shrink-0 items-start justify-between border-b border-border px-6 py-4">
           <div>
-            <h2 className="text-xl font-semibold text-foreground">Add New Trade</h2>
+            <h2 className="text-xl font-semibold text-foreground">
+              {tradeToEdit ? "Edit Trade" : "Add New Trade"}
+            </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Enter the details of your trade
+              {tradeToEdit ? "Update and save your changes" : "Enter the details of your trade"}
             </p>
           </div>
           <button
@@ -323,12 +376,18 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
                   Market <span className="text-destructive">*</span>
                 </label>
                 <select
-                  {...register("market")}
+                  {...marketField}
+                  onChange={(e) => {
+                    marketField.onChange(e);
+                    setValue("symbol", "");
+                    setSymbolFilter("");
+                  }}
                   className="w-full rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent"
                 >
                   <option value="crypto">Crypto</option>
                   <option value="cfd">CFD</option>
                   <option value="forex">Forex</option>
+                  <option value="stocks">Stocks</option>
                 </select>
               </div>
             </div>
@@ -556,7 +615,7 @@ export function AddTradeDialog({ open, onOpenChange, onSuccess, totalBalance = 0
               disabled={submitting || !preview || !symbol?.trim()}
               className="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >
-              {submitting ? "Saving…" : "Add Trade"}
+              {submitting ? "Saving…" : tradeToEdit ? "Save changes" : "Add Trade"}
             </button>
           </div>
         </form>

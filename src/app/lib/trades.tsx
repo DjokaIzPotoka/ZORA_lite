@@ -75,6 +75,41 @@ export async function getTradeStats(): Promise<TradeStats> {
   return data as TradeStats;
 }
 
+export async function updateTrade(
+  id: string,
+  row: {
+    symbol: string;
+    type: TradeType;
+    market: Market;
+    entry_price: number;
+    exit_price: number;
+    fees: number;
+    pnl: number;
+    pnl_percent: number;
+    notes?: string | null;
+    qty: number;
+    created_at?: string;
+  }
+) {
+  const updatePayload: Record<string, unknown> = {
+    symbol: row.symbol.trim(),
+    type: row.type,
+    market: row.market,
+    entry_price: row.entry_price,
+    exit_price: row.exit_price,
+    fees: row.fees,
+    pnl: row.pnl,
+    pnl_percent: row.pnl_percent,
+    notes: row.notes?.trim() || null,
+    qty: row.qty,
+  };
+  if (row.created_at) {
+    updatePayload.created_at = row.created_at;
+  }
+  const { error } = await supabase.from("trades").update(updatePayload).eq("id", id);
+  if (error) throw error;
+}
+
 export async function insertTrade(row: {
   symbol: string;
   type: TradeType;

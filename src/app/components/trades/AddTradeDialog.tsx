@@ -46,7 +46,7 @@ type FormValues = {
 
 const defaultValues: DefaultValues<FormValues> = {
   symbol: "",
-  market: "crypto",
+  market: "cfd",
   type: "long",
   entry_price: 0,
   exit_price: 0,
